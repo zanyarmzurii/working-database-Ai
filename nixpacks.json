@@ -1,0 +1,25 @@
+{
+  "providers": ["node"],
+  "aptPkgs": [
+    "chromium",
+    "glib2",
+    "nss",
+    "nspr",
+    "atk",
+    "at-spi2-atk",
+    "cups",
+    "dbus",
+    "libdrm",
+    "libxkbcommon",
+    "libx11",
+    "libxcomposite",
+    "libxdamage",
+    "libxext",
+    "libxfixes",
+    "librandr",
+    "gbm",
+    "pango",
+    "cairo",
+    "asound2"
+  ]
+}
