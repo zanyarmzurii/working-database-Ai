@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>داشبۆردا ڕێڤەبرنا دوکانێ - Kurdish AI Agent</title>
+    <title>داشبۆردا کنترۆڵا دوکانێ - Kurdish AI Agent</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -13,22 +13,21 @@
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
 
-    <!-- Header Navigation -->
     <header class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-xl font-bold shadow-lg shadow-indigo-500/30">
-                    <i class="fa-solid me-0 fa-robot"></i>
+                    <i class="fa-solid fa-robot"></i>
                 </div>
                 <div>
                     <h1 class="font-bold text-lg leading-tight">داشبۆردا کنترۆڵا AI (بادینی)</h1>
-                    <p class="text-xs text-slate-400">سیستەمێ ئۆتۆماتیکی یێ بەرسڤدانا واتسئەپێ</p>
+                    <p class="text-xs text-slate-400">سیستەمێ ئۆتۆماتیکی یێ بەرسڤدانا فرە-پلاتفۆرم</p>
                 </div>
             </div>
             <div class="flex items-center gap-3">
                 <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                    واتسئەپ کاردکەت
+                    سێرڤەر یێ چالاکە
                 </span>
             </div>
         </div>
@@ -36,7 +35,6 @@
 
     <main class="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        <!-- Form Section -->
         <div class="lg:col-span-1 bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl">
             <h2 class="text-lg font-bold text-indigo-400 mb-4 flex items-center gap-2">
                 <i class="fa-solid fa-plus-circle"></i> زێدەکرنا کەلوپەلێ نوی
@@ -67,10 +65,8 @@
             </form>
         </div>
 
-        <!-- Tables Section -->
         <div class="lg:col-span-2 space-y-6">
             
-            <!-- Products List -->
             <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-indigo-400 flex items-center gap-2">
@@ -89,13 +85,11 @@
                             </tr>
                         </thead>
                         <tbody id="productsTable" class="divide-y divide-slate-700/50">
-                            <!-- Items will be populated here -->
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Orders List -->
             <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl">
                 <h2 class="text-lg font-bold text-emerald-400 mb-4 flex items-center gap-2">
                     <i class="fa-solid fa-cart-shopping"></i> داواکاریێن هاتی (Orders)
@@ -107,8 +101,8 @@
                                 <th class="p-3 rounded-r-lg">کۆد</th>
                                 <th class="p-3">کڕیار</th>
                                 <th class="p-3">ژمارا تەلەفۆنێ</th>
+                                <th class="p-3">پلاتفۆرم</th>
                                 <th class="p-3">کەلوپەل</th>
-                                <th class="p-3">شوێن</th>
                             </tr>
                         </thead>
                         <tbody id="ordersTable" class="divide-y divide-slate-700/50">
@@ -116,8 +110,8 @@
                                 <td class="p-3 font-mono text-emerald-400">ORD-1092</td>
                                 <td class="p-3 font-semibold">ئەحمەد دهۆکی</td>
                                 <td class="p-3 dir-ltr text-right">0750 123 4567</td>
+                                <td class="p-3 text-indigo-400">WhatsApp</td>
                                 <td class="p-3">کابۆیا پیاوان</td>
-                                <td class="p-3 text-slate-400">دهۆک - سەرێ گردی</td>
                             </tr>
                         </tbody>
                     </table>
@@ -129,7 +123,6 @@
     </main>
 
     <script>
-        // Frontend logic for managing local storage demonstration
         const defaultProducts = [
             { id: 101, name: "کابۆیا پیاوان", price: "25,000 IQD", inStock: true, image: "https://images.unsplash.com/photo-1542272604-780c36856842?w=600" },
             { id: 102, name: "قەمیصێ سپی", price: "18,000 IQD", inStock: true, image: "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=600" },
@@ -171,3 +164,4 @@
     </script>
 </body>
 </html>
+
