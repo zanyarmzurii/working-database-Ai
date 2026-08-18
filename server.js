@@ -79,7 +79,7 @@ ${JSON.stringify(products, null, 2)}
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
+            model: 'gemini-2.5-flash',
             contents: userMessage,
             config: {
                 systemInstruction: systemPrompt
@@ -95,8 +95,26 @@ ${JSON.stringify(products, null, 2)}
 // ==========================================
 // پلاتفۆرمێ ١: واتسئەپ (WHATSAPP BOT)
 // ==========================================
+const chromiumPath = process.env.PUPPETEER_EXEC_PATH || 
+                     process.env.CHROME_BIN || 
+                     '/usr/bin/chromium' || 
+                     '/usr/bin/chromium-browser';
+
 const whatsappClient = new Client({
-    authStrategy: new LocalAuth()
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        executablePath: chromiumPath,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+        ]
+    }
 });
 
 whatsappClient.on('qr', (qr) => {
@@ -217,36 +235,44 @@ app.post('/webhook/meta', async (req, res) => {
 
     if (body.object === 'page' || body.object === 'instagram') {
         for (const entry of body.entry) {
-            // بەرسڤدانا دایرێکتان (Direct Messages)
-            const webhookEvent = entry.messaging ? entry.messaging[0] : null;
-            if (webhookEvent && webhookEvent.message && webhookEvent.message.text) {
-                const senderPsid = webhookEvent.sender.id;
-                const userMessage = webhookEvent.message.text;
-                console.log(`📩 [Meta DM (${body.object})]: ${userMessage}`);
+            try {
+                // بەرسڤدانا دایرێکتان (Direct Messages)
+                const webhookEvent = entry.messaging ? entry.messaging[0] : null;
+                if (webhookEvent && webhookEvent.message && webhookEvent.message.text) {
+                    const senderPsid = webhookEvent.sender.id;
+                    const userMessage = webhookEvent.message.text;
+                    console.log(`📩 [Meta DM (${body.object})]: ${userMessage}`);
 
-                let aiReply = await generateAiReply(userMessage, body.object);
+                    let aiReply = await generateAiReply(userMessage, body.object);
 
-                await axios.post(`https://graph.facebook.com/v19.0/me/messages?access_token=${process.env.META_PAGE_ACCESS_TOKEN}`, {
-                    recipient: { id: senderPsid },
-                    message: { text: aiReply }
-                });
-            }
-
-            // بەرسڤدانا کۆمێنتان (Comments)
-            if (entry.changes) {
-                for (const change of entry.changes) {
-                    if (change.field === 'comments' && change.value && change.value.text) {
-                        const commentId = change.value.id;
-                        const commentText = change.value.text;
-                        console.log(`💬 [Meta Comment]: ${commentText}`);
-
-                        let aiReply = await generateAiReply(commentText, 'Instagram/FB Comment');
-
-                        await axios.post(`https://graph.facebook.com/v19.0/${commentId}/replies?access_token=${process.env.META_PAGE_ACCESS_TOKEN}`, {
-                            message: aiReply
+                    if (process.env.META_PAGE_ACCESS_TOKEN) {
+                        await axios.post(`https://graph.facebook.com/v19.0/me/messages?access_token=${process.env.META_PAGE_ACCESS_TOKEN}`, {
+                            recipient: { id: senderPsid },
+                            message: { text: aiReply }
                         });
                     }
                 }
+
+                // بەرسڤدانا کۆمێنتان (Comments)
+                if (entry.changes) {
+                    for (const change of entry.changes) {
+                        if (change.field === 'comments' && change.value && change.value.text) {
+                            const commentId = change.value.id;
+                            const commentText = change.value.text;
+                            console.log(`💬 [Meta Comment]: ${commentText}`);
+
+                            let aiReply = await generateAiReply(commentText, 'Instagram/FB Comment');
+
+                            if (process.env.META_PAGE_ACCESS_TOKEN) {
+                                await axios.post(`https://graph.facebook.com/v19.0/${commentId}/replies?access_token=${process.env.META_PAGE_ACCESS_TOKEN}`, {
+                                    message: aiReply
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('❌ شاشی د پڕۆسەییا Meta Webhook دا:', err.message);
             }
         }
     }
@@ -260,18 +286,24 @@ app.post('/webhook/tiktok', async (req, res) => {
     const { event, data } = req.body || {};
 
     if (event === 'im.message.receive' && data && data.content) {
-        const senderId = data.sender_open_id;
-        const userMessage = data.content;
-        console.log(`📩 [TikTok DM]: ${userMessage}`);
+        try {
+            const senderId = data.sender_open_id;
+            const userMessage = data.content;
+            console.log(`📩 [TikTok DM]: ${userMessage}`);
 
-        let aiReply = await generateAiReply(userMessage, 'TikTok');
+            let aiReply = await generateAiReply(userMessage, 'TikTok');
 
-        await axios.post('https://open.tiktokapis.com/v2/im/message/send/', {
-            recipient_open_id: senderId,
-            message: { text: aiReply }
-        }, {
-            headers: { 'Authorization': `Bearer ${process.env.TIKTOK_ACCESS_TOKEN}` }
-        });
+            if (process.env.TIKTOK_ACCESS_TOKEN) {
+                await axios.post('https://open.tiktokapis.com/v2/im/message/send/', {
+                    recipient_open_id: senderId,
+                    message: { text: aiReply }
+                }, {
+                    headers: { 'Authorization': `Bearer ${process.env.TIKTOK_ACCESS_TOKEN}` }
+                });
+            }
+        } catch (err) {
+            console.error('❌ شاشی د پڕۆسەییا TikTok Webhook دا:', err.message);
+        }
     }
 });
 
