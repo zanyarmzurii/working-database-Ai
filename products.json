@@ -1,0 +1,26 @@
+[
+  {
+    "id": 101,
+    "name": "کابۆیا پیاوان",
+    "price": "25,000 IQD",
+    "category": "جلوبەرگ",
+    "inStock": true,
+    "image": "https://images.unsplash.com/photo-1542272604-780c36856842?w=600"
+  },
+  {
+    "id": 102,
+    "name": "قەمیصێ سپی",
+    "price": "18,000 IQD",
+    "category": "جلوبەرگ",
+    "inStock": true,
+    "image": "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=600"
+  },
+  {
+    "id": 103,
+    "name": "سۆئیتەرێ زڤستانێ",
+    "price": "35,000 IQD",
+    "category": "جلوبەرگ",
+    "inStock": false,
+    "image": "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=600"
+  }
+]

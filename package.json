@@ -1,0 +1,18 @@
+{
+  "name": "kurdish-ai-ecosystem",
+  "version": "2.0.0",
+  "description": "Enterprise Multi-Platform Kurdish AI Sales Agent for Badini dialect",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.17.1",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-telegram-bot-api": "^0.66.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}

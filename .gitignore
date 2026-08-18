@@ -1,0 +1,9 @@
+# Dependency folders
+node_modules/
+
+# Environment files (API Keys)
+.env
+
+# Local logs & database output
+*.log
+orders.json
