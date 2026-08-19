@@ -7,6 +7,7 @@ const qrcode = require('qrcode-terminal');
 const { GoogleGenAI } = require('@google/genai');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const app = express();
 app.use(express.json());
@@ -97,18 +98,53 @@ ${JSON.stringify(products, null, 2)}
 // ==========================================
 
 // دیتنەوەی ڕێڕەوی دروستی Chromium د سەر سێرڤەر دا
-let chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+function findChromiumExecutable() {
+    // ١. ئەگەر env variable هاتبیت دانان و ڕاست بیت، ئەوێ بکار بینە
+    const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
 
-if (!chromiumPath || !fs.existsSync(chromiumPath)) {
+    // ٢. جهێن ستاندارد یێن Debian/Ubuntu/Alpine بپشکنە (بۆ Dockerfile یێن apt/apk)
     const possiblePaths = [
         '/usr/bin/chromium',
         '/usr/bin/chromium-browser',
         '/usr/bin/google-chrome-stable'
     ];
-    chromiumPath = possiblePaths.find(p => fs.existsSync(p)) || possiblePaths[0];
+    const found = possiblePaths.find(p => fs.existsSync(p));
+    if (found) return found;
+
+    // ٣. بۆ Railway/Nixpacks: Chromium د ژێر /nix/store/... دا یە ب hash یا گۆهۆرباری
+    //    بۆیە پێدڤیە ب فەرمانا "which" یان گەرینا ناڤ Nix store بهێتە دیتن
+    try {
+        const whichResult = execSync('which chromium', { encoding: 'utf8' }).trim();
+        if (whichResult && fs.existsSync(whichResult)) return whichResult;
+    } catch (e) {
+        // "which" نەبوویە سەرکەفتی، دۆم بکە بۆ ڕێکا دواتر
+    }
+
+    try {
+        // گەرین ب ڕاستەوخۆ ناڤ /nix/store دا بۆ binary یا chromium
+        const nixResult = execSync(
+            "find /nix/store -maxdepth 4 -type f -name chromium -path '*/bin/*' 2>/dev/null | head -n 1",
+            { encoding: 'utf8' }
+        ).trim();
+        if (nixResult && fs.existsSync(nixResult)) return nixResult;
+    } catch (e) {
+        // نەهاتە دیتن
+    }
+
+    console.error('❌ Chromium نەهاتە دیتن ل هیچ جهێ! تکایە پشتڕاست بە کو Chromium د nixpacks.toml/Dockerfile دا هاتیە دانان.');
+    return undefined;
 }
 
-console.log(`📌 Using Chromium executable at: ${chromiumPath}`);
+const chromiumPath = findChromiumExecutable();
+console.log(`📌 Using Chromium executable at: ${chromiumPath || '(نەهاتە دیتن)'}`);
+
+if (!chromiumPath) {
+    console.error('❌ شاشییا گرنگ: Chromium نەهاتە دیتن. بۆتێ واتسئەپێ نەشێت دەست پێ بکەت.');
+    process.exit(1);
+}
 
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
