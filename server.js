@@ -95,9 +95,10 @@ ${JSON.stringify(products, null, 2)}
 // ==========================================
 // پلاتفۆرمێ ١: واتسئەپ (WHATSAPP BOT)
 // ==========================================
-const chromiumPath = process.env.PUPPETEER_EXEC_PATH || 
+// ڕاستکرنا ڕێڕەوا Chromium دا کو ل سەر VPS و Railway ڕاست ببینیێت
+const chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || 
+                     process.env.PUPPETEER_EXEC_PATH || 
                      process.env.CHROME_BIN || 
-                     '/usr/bin/chromium' || 
                      '/usr/bin/chromium-browser';
 
 const whatsappClient = new Client({
@@ -111,7 +112,6 @@ const whatsappClient = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process',
             '--disable-gpu'
         ]
     }
