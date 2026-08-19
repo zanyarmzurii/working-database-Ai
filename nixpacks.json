@@ -1,8 +1,8 @@
 {
   "providers": ["node"],
-  "aptPkgs": [
+  "pkgs": [
     "chromium",
-    "glib2",
+    "glib",
     "nss",
     "nspr",
     "atk",
@@ -11,20 +11,18 @@
     "dbus",
     "libdrm",
     "libxkbcommon",
-    "libx11",
-    "libxcomposite",
-    "libxdamage",
-    "libxext",
-    "libxfixes",
-    "librandr",
-    "gbm",
+    "xorg.libX11",
+    "xorg.libXcomposite",
+    "xorg.libXdamage",
+    "xorg.libXext",
+    "xorg.libXfixes",
+    "xorg.libXrandr",
+    "mesa",
     "pango",
     "cairo",
-    "asound2",
-    "libgconf-2-4",
-    "libatk1.0-0",
-    "libatk-bridge2.0-0",
-    "libgdk-pixbuf2.0-0",
-    "libgtk-3-0"
-  ]
+    "alsa-lib"
+  ],
+  "variables": {
+    "PUPPETEER_EXECUTABLE_PATH": "/usr/bin/chromium-browser"
+  }
 }
