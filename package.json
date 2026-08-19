@@ -3,6 +3,10 @@
   "version": "2.0.0",
   "description": "Enterprise Multi-Platform Kurdish AI Sales Agent for Badini dialect",
   "main": "server.js",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start": "node server.js"
   },
