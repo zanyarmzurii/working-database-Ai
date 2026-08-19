@@ -190,6 +190,31 @@ function findChromiumExecutable() {
     return undefined;
 }
 
+// فەنکشنا پاککرنا لۆک فایلێن Chromium (Singleton Lock Cleaner)
+function clearChromeLockRecursively(directory) {
+    if (!fs.existsSync(directory)) return;
+    const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie'];
+    
+    try {
+        const files = fs.readdirSync(directory);
+        for (const file of files) {
+            const fullPath = path.join(directory, file);
+            if (fs.statSync(fullPath).isDirectory()) {
+                clearChromeLockRecursively(fullPath);
+            } else if (lockFiles.includes(file)) {
+                try {
+                    fs.unlinkSync(fullPath);
+                    console.log(`🧹 [Chromium Lock Cleaner]: Removed stale lock file: ${fullPath}`);
+                } catch (e) {
+                    console.error(`⚠️ Could not remove lock file ${fullPath}:`, e.message);
+                }
+            }
+        }
+    } catch (err) {
+        console.error(`⚠️ Error scanning directory for locks: ${directory}`, err.message);
+    }
+}
+
 const chromiumPath = findChromiumExecutable();
 console.log(`📌 Using Chromium executable at: ${chromiumPath || '(نەهاتە دیتن)'}`);
 
@@ -198,11 +223,23 @@ if (!chromiumPath) {
     process.exit(1);
 }
 
+// سڕینەڤەیا لۆک فایلان ژ فۆڵدەرا session بەریا دەستپێکرنا واتسئەپێ
+const wwebjsAuthPath = path.join(__dirname, '.wwebjs_auth');
+clearChromeLockRecursively(wwebjsAuthPath);
+
 const whatsappClient = new Client({
     authStrategy: new LocalAuth({ dataPath: './.wwebjs_auth' }),
     puppeteer: {
         executablePath: chromiumPath,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote', '--disable-gpu']
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage', 
+            '--disable-accelerated-2d-canvas', 
+            '--no-first-run', 
+            '--no-zygote', 
+            '--disable-gpu'
+        ]
     }
 });
 
