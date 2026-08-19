@@ -23,6 +23,6 @@
     "alsa-lib"
   ],
   "variables": {
-    "PUPPETEER_EXECUTABLE_PATH": "/usr/bin/chromium-browser"
+    "PUPPETEER_EXECUTABLE_PATH": "/usr/bin/chromium"
   }
 }
