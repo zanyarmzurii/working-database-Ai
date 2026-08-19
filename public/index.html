@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>داشبۆڕدا داواکارییان - Kurdish AI</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #f4f7f6; padding: 20px; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: center; }
+        th { background: #007bff; color: white; }
+        select { padding: 5px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>📦 کارگێڕییا داواکارییان</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>کۆد</th>
+                <th>کڕیار</th>
+                <th>تەلەفۆن</th>
+                <th>ناڤنیشان</th>
+                <th>کەلوپەل</th>
+                <th>پلاتفۆڕم</th>
+                <th>مێژوو</th>
+                <th>ستاتۆس</th>
+            </tr>
+        </thead>
+        <tbody id="ordersTable"></tbody>
+    </table>
+
+    <script>
+        async function loadOrders() {
+            const res = await fetch('/api/orders');
+            const orders = await res.json();
+            const table = document.getElementById('ordersTable');
+            table.innerHTML = '';
+
+            orders.forEach(o => {
+                table.innerHTML += `
+                    <tr>
+                        <td>${o.id}</td>
+                        <td>${o.customer}</td>
+                        <td>${o.phone}</td>
+                        <td>${o.address}</td>
+                        <td>${o.item}</td>
+                        <td>${o.platform}</td>
+                        <td>${o.date}</td>
+                        <td>
+                            <select onchange="updateStatus('${o.id}', this.value)">
+                                <option value="نوی" ${o.status === 'نوی' ? 'selected' : ''}>نوی</option>
+                                <option value="د ڕێیا ڕێگایە" ${o.status === 'د ڕێیا ڕێگایە' ? 'selected' : ''}>د ڕێیا ڕێگایە</option>
+                                <option value="گەهشت" ${o.status === 'گەهشت' ? 'selected' : ''}>گەهشت</option>
+                                <option value="هەڵوەشایەوە" ${o.status === 'هەڵوەشایەوە' ? 'selected' : ''}>هەڵوەشایەوە</option>
+                            </select>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function updateStatus(orderId, newStatus) {
+            await fetch('/api/orders/update-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId, newStatus })
+            });
+            alert('ستاتۆس هاتە نووکرن!');
+        }
+
+        loadOrders();
+        setInterval(loadOrders, 10000); // خودکار نووکرنڤە هەر ١٠ چرکەیان
+    </script>
+</body>
+</html>
