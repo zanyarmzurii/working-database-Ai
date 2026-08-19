@@ -4,21 +4,42 @@ const axios = require('axios');
 const TelegramBot = require('node-telegram-bot-api');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { GoogleGenAI } = require('@google/genai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public')); // بۆ کارپێکرنا دێشبۆڕدا HTML د ناو فولدەرا public دا
 
-// ١. پشتڕاستکرن ژ کلیلا گووگڵ API
+// ١. پشتڕاستکرن ژ کلیلا گووگڵ API و دروستکرنا Client
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
     console.error('❌ شاشییا گرنگ: GEMINI_API_KEY د فایلا .env دا نینە!');
     process.exit(1);
 }
-const ai = new GoogleGenAI({ apiKey });
+const genAI = new GoogleGenerativeAI(apiKey);
+
+// بیردانکا ئاخفتنان (Chat History Memory)
+const chatMemory = new Map();
+
+function getChatHistory(userId) {
+    if (!chatMemory.has(userId)) {
+        chatMemory.set(userId, []);
+    }
+    return chatMemory.get(userId);
+}
+
+function updateChatHistory(userId, userMsg, aiMsg) {
+    const history = getChatHistory(userId);
+    history.push({ role: "user", parts: [{ text: userMsg }] });
+    history.push({ role: "model", parts: [{ text: aiMsg }] });
+    // پاراستنا ٥ ئاخفتنێن داویێ (١٠ نامە د ناو زنجیرێ دا)
+    if (history.length > 10) {
+        chatMemory.set(userId, history.slice(-10));
+    }
+}
 
 // ٢. خویندنا داتابەیسا کەلوپەلان ژ products.json
 function getProducts() {
@@ -33,13 +54,20 @@ function getProducts() {
 }
 
 // ٣. پاشکەوتکرنا داواکاریێن نوی د orders.json دا
+function getOrders() {
+    try {
+        const filePath = path.join(__dirname, 'orders.json');
+        if (!fs.existsSync(filePath)) return [];
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (e) {
+        return [];
+    }
+}
+
 function saveOrder(orderData) {
     try {
         const filePath = path.join(__dirname, 'orders.json');
-        let orders = [];
-        if (fs.existsSync(filePath)) {
-            orders = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        }
+        let orders = getOrders();
         const newOrder = {
             id: "ORD-" + Math.floor(10000 + Math.random() * 90000),
             customer: orderData.customer || "نەدیار",
@@ -53,6 +81,10 @@ function saveOrder(orderData) {
         orders.unshift(newOrder);
         fs.writeFileSync(filePath, JSON.stringify(orders, null, 2), 'utf8');
         console.log(`✅ داواکاریا نوی هاتە تۆمارکرن: ${newOrder.id}`);
+
+        // ئاگاهدارکرنا ڕاستەوخۆ یا ئادمینی ل سەر تێلیگرامێ
+        sendAdminTelegramAlert(newOrder);
+
         return newOrder.id;
     } catch (e) {
         console.error('❌ شاشی د پاشکەوتکرنا داواکاریێ دا:', e);
@@ -60,81 +92,101 @@ function saveOrder(orderData) {
     }
 }
 
-// ٤. مۆتۆڕێ ناڤەندی یێ زێڕینی بۆ دروستکرنا بەرسڤێن AI ب بادینی
-async function generateAiReply(userMessage, platformName) {
+// ٤. مۆتۆڕێ ناڤەندی یێ AI ب بیردانک و پشتگیرییا داشکانانڤە
+async function generateAiReply(userId, userMessage, platformName) {
     const products = getProducts();
     const systemPrompt = `
 تۆ بریکارەکێ فرۆشتنێ یێ کارامە و زیرەکی ل دوکانا مە ل سەر پلاتفۆرمێ [${platformName}].
 زمانێ تە: بەرسڤێن تە تەنها ب زمانێ کوردی - شێوەزارێ بادینی (دەڤۆکا دهۆک و زاخۆ) بن. گەلەک ب ڕێز، گەرم و جەذاب بەرسڤێ بدە.
 
-داتابەیسا کەلوپەلێن ئامادە ل دوکانێ:
+داتابەیسا کەلوپەلێن ئامادە و داشکانان (Discounts):
 ${JSON.stringify(products, null, 2)}
 
 ڕێنما و یاسا:
 ١. تەنها ب کوردییا بادینی بەرسڤ بدە.
-٢. دەمێ کڕیاری داواکاریا نرخ یان زانیاری کر، تەماشەی داتابەیسێ بکە و بەرسڤێ بدە.
+٢. دەمێ کڕیاری داواکاریا نرخ یان زانیاری کر، تەماشەی داتابەیسێ بکە. ئەگەر کەلوپەلێ داواکری داشکان (discount) یان ئۆفەر هەبوو، ب گەرمی کڕیار ئاگادار بکھ.
 ٣. ئەگەر کڕیاری داخوازا وێنەی کر بۆ پارچەیەکێ، نیشانا [IMAGE: ناڤێ پارچەیێ] د ناو دەقێ بەرسڤا خۆ دا چێکە.
 ٤. دەمێ کڕیار بەرهەڤ بوو بۆ کڕینێ، زانیاریان وەربگرە (ناڤ، تەلەفۆن، ناڤنیشان، کەلوپەل) و ئەڤێ هێلێ د داوییا بەرسڤێ دا دیار بکە:
 [ORDER_CONFIRMED: ناڤێ کڕیاری | ژمارا تەلەفۆنێ | ناڤنیشان | ناڤێ پارچەیێ]
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: userMessage,
-            config: {
-                systemInstruction: systemPrompt
-            }
+        const history = getChatHistory(userId);
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash",
+            systemInstruction: systemPrompt 
         });
-        return response.text || "";
+
+        const chat = model.startChat({ history });
+        const result = await chat.sendMessage(userMessage);
+        const replyText = result.response.text() || "";
+
+        // پاشکەوتکرنا ئاخفتنێ د بیردانکێ دا
+        updateChatHistory(userId, userMessage, replyText);
+
+        return replyText;
     } catch (err) {
-        console.error(`❌ شاشییا AI ل سەر پلاتفۆرمێ ${platformName}:`, err);
+        console.error(`❌ شاشییا AI ل سەر پلاتفۆرمێ ${platformName}:`, err.message);
         return "ببورە، نوکە کێشەیەکا تەکنیکی یا هەی. ژکەرەما خۆ دووبارە بڕێزە.";
     }
 }
 
 // ==========================================
+// ٥. سیستمێ ئاگاهدارکرنا ئادمینی (ADMIN TELEGRAM ALERT)
+// ==========================================
+let globalTelegramBot = null;
+if (process.env.TELEGRAM_BOT_TOKEN && !process.env.TELEGRAM_BOT_TOKEN.includes('AAExxxxx')) {
+    globalTelegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+}
+
+function sendAdminTelegramAlert(order) {
+    const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+    if (globalTelegramBot && adminChatId) {
+        const alertMsg = `🚨 **داواکارییا نوی هاتە تۆمارکرن!**\n\n🆔 **کۆد:** ${order.id}\n👤 **کڕیار:** ${order.customer}\n📞 **تەلەفۆن:** ${order.phone}\n📍 **ناڤنیشان:** ${order.address}\n📦 **کەلوپەل:** ${order.item}\n🌐 **پلاتفۆڕم:** ${order.platform}\n⏰ **مێژوو:** ${order.date}`;
+        globalTelegramBot.sendMessage(adminChatId, alertMsg, { parse_mode: 'Markdown' }).catch(e => console.error("Error sending admin alert:", e.message));
+    }
+}
+
+// ==========================================
+// ٦. API دێشبۆڕدا وێب (WEB DASHBOARD ENDPOINTS)
+// ==========================================
+app.get('/api/orders', (req, res) => {
+    res.json(getOrders());
+});
+
+app.post('/api/orders/update-status', (req, res) => {
+    const { orderId, newStatus } = req.body;
+    let orders = getOrders();
+    const orderIndex = orders.findIndex(o => o.id === orderId);
+    if (orderIndex !== -1) {
+        orders[orderIndex].status = newStatus;
+        fs.writeFileSync(path.join(__dirname, 'orders.json'), JSON.stringify(orders, null, 2), 'utf8');
+        return res.json({ success: true, message: "ستاتۆس بە سەرکەوتوویی هاتە گۆڕین" });
+    }
+    res.status(404).json({ success: false, message: "داواکاری نەهاتە دیتن" });
+});
+
+// ==========================================
 // پلاتفۆرمێ ١: واتسئەپ (WHATSAPP BOT)
 // ==========================================
-
-// دیتنەوەی ڕێڕەوی دروستی Chromium د سەر سێرڤەر دا
 function findChromiumExecutable() {
-    // ١. ئەگەر env variable هاتبیت دانان و ڕاست بیت، ئەوێ بکار بینە
     const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
-    if (envPath && fs.existsSync(envPath)) {
-        return envPath;
-    }
+    if (envPath && fs.existsSync(envPath)) return envPath;
 
-    // ٢. جهێن ستاندارد یێن Debian/Ubuntu/Alpine بپشکنە (بۆ Dockerfile یێن apt/apk)
-    const possiblePaths = [
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/google-chrome-stable'
-    ];
+    const possiblePaths = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome-stable'];
     const found = possiblePaths.find(p => fs.existsSync(p));
     if (found) return found;
 
-    // ٣. بۆ Railway/Nixpacks: Chromium د ژێر /nix/store/... دا یە ب hash یا گۆهۆرباری
-    //    بۆیە پێدڤیە ب فەرمانا "which" یان گەرینا ناڤ Nix store بهێتە دیتن
     try {
         const whichResult = execSync('which chromium', { encoding: 'utf8' }).trim();
         if (whichResult && fs.existsSync(whichResult)) return whichResult;
-    } catch (e) {
-        // "which" نەبوویە سەرکەفتی، دۆم بکە بۆ ڕێکا دواتر
-    }
+    } catch (e) {}
 
     try {
-        // گەرین ب ڕاستەوخۆ ناڤ /nix/store دا بۆ binary یا chromium
-        const nixResult = execSync(
-            "find /nix/store -maxdepth 4 -type f -name chromium -path '*/bin/*' 2>/dev/null | head -n 1",
-            { encoding: 'utf8' }
-        ).trim();
+        const nixResult = execSync("find /nix/store -maxdepth 4 -type f -name chromium -path '*/bin/*' 2>/dev/null | head -n 1", { encoding: 'utf8' }).trim();
         if (nixResult && fs.existsSync(nixResult)) return nixResult;
-    } catch (e) {
-        // نەهاتە دیتن
-    }
+    } catch (e) {}
 
-    console.error('❌ Chromium نەهاتە دیتن ل هیچ جهێ! تکایە پشتڕاست بە کو Chromium د nixpacks.toml/Dockerfile دا هاتیە دانان.');
     return undefined;
 }
 
@@ -147,18 +199,10 @@ if (!chromiumPath) {
 }
 
 const whatsappClient = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({ dataPath: './.wwebjs_auth' }),
     puppeteer: {
         executablePath: chromiumPath,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu'
-        ]
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote', '--disable-gpu']
     }
 });
 
@@ -175,9 +219,8 @@ whatsappClient.on('message', async (msg) => {
     if (msg.from.includes('@g.us') || msg.from.includes('@newsletter') || msg.from.includes('@broadcast')) return;
 
     console.log(`📩 [WhatsApp DM]: ${msg.body}`);
-    let botReply = await generateAiReply(msg.body, 'WhatsApp');
+    let botReply = await generateAiReply(msg.from, msg.body, 'WhatsApp');
 
-    // داواکاری
     if (botReply.includes('[ORDER_CONFIRMED:')) {
         const match = botReply.match(/\[ORDER_CONFIRMED:\s*(.*?)\]/);
         if (match && match[1]) {
@@ -187,7 +230,6 @@ whatsappClient.on('message', async (msg) => {
         }
     }
 
-    // وێنە
     if (botReply.includes('[IMAGE:')) {
         const imgMatch = botReply.match(/\[IMAGE:\s*(.*?)\]/);
         if (imgMatch && imgMatch[1]) {
@@ -197,12 +239,16 @@ whatsappClient.on('message', async (msg) => {
 
             if (botReply.length > 0) await msg.reply(botReply);
 
-            if (matchedProduct && matchedProduct.image) {
-                try {
-                    const media = await MessageMedia.fromUrl(matchedProduct.image);
-                    await whatsappClient.sendMessage(msg.from, media, { caption: `وێنێ: ${matchedProduct.name} - نرخ: ${matchedProduct.price}` });
-                } catch (e) {
-                    console.error('❌ شاشی د فرێکرنا وێنێ واتسئەپێ دا:', e);
+            // پشتگیرییا فرە-وێنەیان (Album/Multiple Images)
+            if (matchedProduct) {
+                const imagesToSend = matchedProduct.images || (matchedProduct.image ? [matchedProduct.image] : []);
+                for (const imgUrl of imagesToSend) {
+                    try {
+                        const media = await MessageMedia.fromUrl(imgUrl);
+                        await whatsappClient.sendMessage(msg.from, media, { caption: `${matchedProduct.name} - نرخ: ${matchedProduct.price}` });
+                    } catch (e) {
+                        console.error('❌ شاشی د فرێکرنا وێنێ واتسئەپێ دا:', e);
+                    }
                 }
             }
             return;
@@ -219,16 +265,15 @@ whatsappClient.initialize();
 // ==========================================
 // پلاتفۆرمێ ٢: تێلیگرام (TELEGRAM BOT)
 // ==========================================
-if (process.env.TELEGRAM_BOT_TOKEN && !process.env.TELEGRAM_BOT_TOKEN.includes('AAExxxxx')) {
-    const telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+if (globalTelegramBot) {
     console.log('🚀 [Telegram Engine]: بۆتێ تێلیگرامێ چالاک بوو!');
 
-    telegramBot.on('message', async (msg) => {
+    globalTelegramBot.on('message', async (msg) => {
         if (!msg.text) return;
         const chatId = msg.chat.id;
         console.log(`📩 [Telegram DM]: ${msg.text}`);
 
-        let botReply = await generateAiReply(msg.text, 'Telegram');
+        let botReply = await generateAiReply(chatId.toString(), msg.text, 'Telegram');
 
         if (botReply.includes('[ORDER_CONFIRMED:')) {
             const match = botReply.match(/\[ORDER_CONFIRMED:\s*(.*?)\]/);
@@ -246,15 +291,19 @@ if (process.env.TELEGRAM_BOT_TOKEN && !process.env.TELEGRAM_BOT_TOKEN.includes('
                 const matchedProduct = getProducts().find(p => p.name.toLowerCase().includes(pName));
                 botReply = botReply.replace(/\[IMAGE:.*?\]/, '').trim();
 
-                if (botReply) await telegramBot.sendMessage(chatId, botReply);
-                if (matchedProduct && matchedProduct.image) {
-                    await telegramBot.sendPhoto(chatId, matchedProduct.image, { caption: `${matchedProduct.name} - ${matchedProduct.price}` });
+                if (botReply) await globalTelegramBot.sendMessage(chatId, botReply);
+                
+                if (matchedProduct) {
+                    const imagesToSend = matchedProduct.images || (matchedProduct.image ? [matchedProduct.image] : []);
+                    for (const imgUrl of imagesToSend) {
+                        await globalTelegramBot.sendPhoto(chatId, imgUrl, { caption: `${matchedProduct.name} - ${matchedProduct.price}` }).catch(e => console.error(e));
+                    }
                 }
                 return;
             }
         }
 
-        await telegramBot.sendMessage(chatId, botReply);
+        await globalTelegramBot.sendMessage(chatId, botReply);
     });
 }
 
@@ -281,14 +330,13 @@ app.post('/webhook/meta', async (req, res) => {
     if (body.object === 'page' || body.object === 'instagram') {
         for (const entry of body.entry) {
             try {
-                // بەرسڤدانا دایرێکتان (Direct Messages)
                 const webhookEvent = entry.messaging ? entry.messaging[0] : null;
                 if (webhookEvent && webhookEvent.message && webhookEvent.message.text) {
                     const senderPsid = webhookEvent.sender.id;
                     const userMessage = webhookEvent.message.text;
                     console.log(`📩 [Meta DM (${body.object})]: ${userMessage}`);
 
-                    let aiReply = await generateAiReply(userMessage, body.object);
+                    let aiReply = await generateAiReply(senderPsid, userMessage, body.object);
 
                     if (process.env.META_PAGE_ACCESS_TOKEN) {
                         await axios.post(`https://graph.facebook.com/v19.0/me/messages?access_token=${process.env.META_PAGE_ACCESS_TOKEN}`, {
@@ -298,7 +346,6 @@ app.post('/webhook/meta', async (req, res) => {
                     }
                 }
 
-                // بەرسڤدانا کۆمێنتان (Comments)
                 if (entry.changes) {
                     for (const change of entry.changes) {
                         if (change.field === 'comments' && change.value && change.value.text) {
@@ -306,7 +353,7 @@ app.post('/webhook/meta', async (req, res) => {
                             const commentText = change.value.text;
                             console.log(`💬 [Meta Comment]: ${commentText}`);
 
-                            let aiReply = await generateAiReply(commentText, 'Instagram/FB Comment');
+                            let aiReply = await generateAiReply(commentId, commentText, 'Instagram/FB Comment');
 
                             if (process.env.META_PAGE_ACCESS_TOKEN) {
                                 await axios.post(`https://graph.facebook.com/v19.0/${commentId}/replies?access_token=${process.env.META_PAGE_ACCESS_TOKEN}`, {
@@ -336,7 +383,7 @@ app.post('/webhook/tiktok', async (req, res) => {
             const userMessage = data.content;
             console.log(`📩 [TikTok DM]: ${userMessage}`);
 
-            let aiReply = await generateAiReply(userMessage, 'TikTok');
+            let aiReply = await generateAiReply(senderId, userMessage, 'TikTok');
 
             if (process.env.TIKTOK_ACCESS_TOKEN) {
                 await axios.post('https://open.tiktokapis.com/v2/im/message/send/', {
