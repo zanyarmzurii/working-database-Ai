@@ -95,10 +95,20 @@ ${JSON.stringify(products, null, 2)}
 // ==========================================
 // پلاتفۆرمێ ١: واتسئەپ (WHATSAPP BOT)
 // ==========================================
-const chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-                     process.env.PUPPETEER_EXEC_PATH || 
-                     process.env.CHROME_BIN || 
-                     '/usr/bin/chromium-browser';
+
+// دیتنەوەی ڕێڕەوی دروستی Chromium د سەر سێرڤەر دا
+let chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+
+if (!chromiumPath || !fs.existsSync(chromiumPath)) {
+    const possiblePaths = [
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome-stable'
+    ];
+    chromiumPath = possiblePaths.find(p => fs.existsSync(p)) || possiblePaths[0];
+}
+
+console.log(`📌 Using Chromium executable at: ${chromiumPath}`);
 
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
